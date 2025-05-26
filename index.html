@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirmação de Presença - Quebra-Cabeça</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Define a fonte Inter para todo o corpo do documento */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Estilos específicos para o tabuleiro do quebra-cabeça */
+        #puzzle-board {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr); /* 3 colunas */
+            grid-template-rows: repeat(3, 1fr);    /* 3 linhas */
+            width: 300px; /* Largura fixa para o tabuleiro */
+            height: 300px; /* Altura fixa para o tabuleiro */
+            border: 4px solid #6b46c1; /* Borda roxa escura */
+            border-radius: 12px; /* Cantos arredondados */
+            overflow: hidden; /* Garante que os cantos arredondados funcionem bem */
+            margin: 0 auto; /* Centraliza o tabuleiro */
+        }
+        .puzzle-tile {
+            width: 100px; /* Largura de cada peça */
+            height: 100px; /* Altura de cada peça */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem; /* Tamanho da fonte do número */
+            font-weight: bold;
+            color: #fff; /* Cor do texto branco */
+            background-color: #8b5cf6; /* Fundo roxo claro */
+            border: 1px solid #a78bfa; /* Borda mais clara para separar as peças */
+            cursor: pointer; /* Indica que é clicável */
+            transition: background-color 0.2s ease-in-out, transform 0.1s ease-in-out; /* Transição suave */
+        }
+        .puzzle-tile:hover {
+            background-color: #7c3aed; /* Cor de fundo ao passar o mouse */
+            transform: scale(1.02); /* Pequeno aumento ao passar o mouse */
+        }
+        .puzzle-tile.empty {
+            background-color: #e2e8f0; /* Cor para a peça vazia */
+            cursor: default; /* Remove o cursor de ponteiro */
+        }
+        .puzzle-tile.empty:hover {
+            background-color: #e2e8f0; /* Mantém a cor da peça vazia ao passar o mouse */
+            transform: scale(1); /* Remove o aumento ao passar o mouse */
+        }
+
+        /* Estilos para o modal de confirmação */
+        .confirmation-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7); /* Fundo semi-transparente */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000; /* Garante que fique acima de outros elementos */
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+        }
+        .confirmation-modal.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        .confirmation-content {
+            background-color: #fff;
+            padding: 2rem;
+            border-radius: 1rem;
+            text-align: center;
+            position: relative; /* Para posicionar confetes/balões */
+            overflow: hidden; /* Garante que os confetes/balões não saiam do modal */
+            max-width: 90%;
+            transform: scale(0.9);
+            transition: transform 0.3s ease-in-out;
+        }
+        .confirmation-modal.show .confirmation-content {
+            transform: scale(1);
+        }
+
+        /* Animação de Confetes */
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: #f0f; /* Cor padrão */
+            opacity: 0;
+            animation: fall 3s ease-out forwards;
+            pointer-events: none; /* Não interfere com cliques */
+        }
+        .confetti:nth-child(2n) { background-color: #0ff; }
+        .confetti:nth-child(3n) { background-color: #ff0; }
+        .confetti:nth-child(4n) { background-color: #f00; }
+        .confetti:nth-child(5n) { background-color: #0f0; }
+
+        @keyframes fall {
+            0% { transform: translateY(-100px) rotateZ(0deg); opacity: 0; }
+            10% { opacity: 1; }
+            100% { transform: translateY(500px) rotateZ(720deg); opacity: 0; }
+        }
+
+        /* Animação de Balões */
+        .balloon {
+            position: absolute;
+            width: 50px;
+            height: 70px;
+            background-color: #ff6347; /* Cor padrão */
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; /* Forma de balão */
+            opacity: 0;
+            animation: floatUp 5s ease-out forwards;
+            pointer-events: none;
+        }
+        .balloon::before {
+            content: '';
+            position: absolute;
+            width: 2px;
+            height: 20px;
+            background-color: #333;
+            bottom: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        .balloon:nth-child(2n) { background-color: #4682b4; }
+        .balloon:nth-child(3n) { background-color: #daa520; }
+        .balloon:nth-child(4n) { background-color: #9acd32; }
+
+        @keyframes floatUp {
+            0% { transform: translateY(0px) translateX(0px); opacity: 0; }
+            10% { opacity: 1; }
+            100% { transform: translateY(-600px) translateX(var(--balloon-x-offset, 0px)); opacity: 0; }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-purple-600 to-indigo-800 min-h-screen flex items-center justify-center p-4">
+
+    <div class="bg-white p-8 rounded-xl shadow-2xl max-w-lg w-full text-center transform transition-all duration-300 hover:scale-105">
+        <h1 class="text-3xl font-extrabold text-gray-900 mb-4">
+            🧩 Confirme Sua Presença Resolvendo o Quebra-Cabeça! 🧩
+        </h1>
+        <p class="text-lg text-gray-700 mb-6">
+            Para confirmar sua presença no encontro de <span class="font-bold text-indigo-700">hoje, às 19h</span>,
+            por favor, organize os números em ordem crescente.
+        </p>
+
+        <div id="puzzle-board" class="mb-6">
+            </div>
+
+        <div class="flex flex-col sm:flex-row justify-center gap-4 mb-6">
+            <button id="shuffleButton"
+                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-full shadow-lg transition-all duration-300 ease-in-out transform hover:-translate-y-1 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-blue-300">
+                Embaralhar
+            </button>
+            <button id="hintButton"
+                    class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-full shadow-lg transition-all duration-300 ease-in-out transform hover:-translate-y-1 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-green-300">
+                ✨ Pedir Dica
+            </button>
+            <button id="confirmButton" disabled
+                    class="bg-purple-700 text-white font-bold py-3 px-6 rounded-full shadow-lg transition-all duration-300 ease-in-out transform hover:-translate-y-1 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-purple-300 disabled:opacity-50 disabled:cursor-not-allowed">
+                Confirmar Presença
+            </button>
+        </div>
+
+        <div id="hintArea" class="hidden mt-4 bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded-lg shadow-md" role="status">
+            <strong class="font-bold">Dica da IA:</strong>
+            <span id="hintText" class="block sm:inline"></span>
+        </div>
+        <div id="hintLoading" class="hidden mt-4 text-blue-700">
+            Carregando dica...
+        </div>
+
+        <div id="statusMessage" class="hidden mt-4 bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded-lg shadow-md" role="status">
+            <span class="block sm:inline"></span>
+        </div>
+
+        <div id="errorMessage" class="hidden mt-6 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg shadow-md" role="alert">
+            <strong class="font-bold">Ops!</strong>
+            <span class="block sm:inline">Houve um erro. Por favor, tente novamente.</span>
+        </div>
+    </div>
+
+    <div id="confirmationModal" class="confirmation-modal">
+        <div class="confirmation-content">
+            <h2 class="text-4xl font-extrabold text-green-700 mb-4">
+                🎉 Presença Confirmada! 🎉
+            </h2>
+            <p class="text-xl text-gray-800 mb-6">
+                Aguardamos você hoje às 19h! Prepare-se para um encontro incrível!
+            </p>
+            <button id="closeModalButton"
+                    class="bg-purple-700 hover:bg-purple-800 text-white font-bold py-3 px-6 rounded-full shadow-lg transition-all duration-300 ease-in-out">
+                Fechar
+            </button>
+        </div>
+    </div>
+
+    <script>
+        window.onload = function() {
+            const puzzleBoard = document.getElementById('puzzle-board');
+            const shuffleButton = document.getElementById('shuffleButton');
+            const hintButton = document.getElementById('hintButton');
+            const hintArea = document.getElementById('hintArea');
+            const hintText = document.getElementById('hintText');
+            const hintLoading = document.getElementById('hintLoading');
+            const confirmButton = document.getElementById('confirmButton');
+            const statusMessage = document.getElementById('statusMessage');
+            const errorMessage = document.getElementById('errorMessage');
+
+            // Elementos do modal de confirmação
+            const confirmationModal = document.getElementById('confirmationModal');
+            const closeModalButton = document.getElementById('closeModalButton');
+            const confirmationContent = confirmationModal.querySelector('.confirmation-content');
+
+
+            // O estado inicial do quebra-cabeça (0 representa o espaço vazio)
+            let puzzleState = [1, 2, 3, 4, 5, 6, 7, 8, 0];
+            const winningState = [1, 2, 3, 4, 5, 6, 7, 8, 0]; // Estado final para vitória
+
+            // Função para renderizar as peças do quebra-cabeça no HTML
+            function renderPuzzle() {
+                puzzleBoard.innerHTML = ''; // Limpa o tabuleiro
+                puzzleState.forEach((number, index) => {
+                    const tile = document.createElement('div');
+                    tile.classList.add('puzzle-tile');
+                    tile.dataset.index = index; // Armazena o índice atual no DOM
+                    tile.dataset.value = number; // Armazena o valor da peça
+
+                    if (number === 0) {
+                        tile.classList.add('empty');
+                    } else {
+                        tile.textContent = number;
+                        // Adiciona o evento de clique apenas para peças não vazias
+                        tile.addEventListener('click', handleTileClick);
+                    }
+                    puzzleBoard.appendChild(tile);
+                });
+            }
+
+            // Função para embaralhar o quebra-cabeça
+            function shufflePuzzle() {
+                // Embaralha o array
+                for (let i = puzzleState.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [puzzleState[i], puzzleState[j]] = [puzzleState[j], puzzleState[i]];
+                }
+                // Garante que o quebra-cabeça seja solucionável
+                if (!isSolvable(puzzleState)) {
+                    // Se não for solucionável, troca duas peças para torná-lo
+                    // (exceto o 0)
+                    let idx1 = -1, idx2 = -1;
+                    while (idx1 === -1 || idx2 === -1 || puzzleState[idx1] === 0 || puzzleState[idx2] === 0) {
+                        idx1 = Math.floor(Math.random() * 8); // Pega um índice de 0 a 7
+                        idx2 = Math.floor(Math.random() * 8); // Pega outro índice de 0 a 7
+                        if (idx1 === idx2) {
+                            idx2 = (idx2 + 1) % 8; // Garante que sejam diferentes
+                        }
+                    }
+                    [puzzleState[idx1], puzzleState[idx2]] = [puzzleState[idx2], puzzleState[idx1]];
+                }
+
+                renderPuzzle(); // Renderiza o quebra-cabeça embaralhado
+                confirmButton.disabled = true; // Desabilita o botão de confirmação
+                hideMessage(errorMessage);
+                hideMessage(hintArea); // Oculta a dica ao embaralhar
+                showMessage(statusMessage, "Embaralhado! Organize os números.", 'yellow');
+            }
+
+            // Função para verificar se um quebra-cabeça deslizante é solucionável
+            // Baseado no número de inversões e na posição do espaço vazio
+            function isSolvable(state) {
+                let inversions = 0;
+                const flattenedState = state.filter(num => num !== 0); // Remove o 0
+
+                for (let i = 0; i < flattenedState.length - 1; i++) {
+                    for (let j = i + 1; j < flattenedState.length; j++) {
+                        if (flattenedState[i] > flattenedState[j]) {
+                            inversions++;
+                        }
+                    }
+                }
+
+                // Para um grid 3x3, se o número de inversões for par, é solucionável
+                return inversions % 2 === 0;
+            }
+
+
+            // Função para lidar com o clique em uma peça
+            function handleTileClick(event) {
+                const clickedTile = event.target;
+                const clickedIndex = parseInt(clickedTile.dataset.index);
+                const emptyIndex = puzzleState.indexOf(0);
+
+                // Define as posições possíveis para o espaço vazio
+                const adjacentMoves = {
+                    0: [1, 3],
+                    1: [0, 2, 4],
+                    2: [1, 5],
+                    3: [0, 4, 6],
+                    4: [1, 3, 5, 7],
+                    5: [2, 4, 8],
+                    6: [3, 7],
+                    7: [4, 6, 8],
+                    8: [5, 7]
+                };
+
+                // Verifica se a peça clicada é adjacente ao espaço vazio
+                if (adjacentMoves[emptyIndex].includes(clickedIndex)) {
+                    // Troca a peça clicada com o espaço vazio no array de estado
+                    [puzzleState[clickedIndex], puzzleState[emptyIndex]] = [puzzleState[emptyIndex], puzzleState[clickedIndex]];
+                    renderPuzzle(); // Re-renderiza o tabuleiro
+
+                    // Verifica se o quebra-cabeça foi resolvido
+                    if (checkWin()) {
+                        showMessage(statusMessage, "Parabéns! Quebra-cabeça resolvido!", 'green');
+                        confirmButton.disabled = false; // Habilita o botão de confirmação
+                        hideMessage(hintArea); // Oculta a dica ao resolver
+                    } else {
+                        hideMessage(statusMessage); // Oculta a mensagem de status se não estiver resolvido
+                        confirmButton.disabled = true; // Mantém o botão desabilitado
+                    }
+                }
+            }
+
+            // Função para verificar se o quebra-cabeça está resolvido
+            function checkWin() {
+                // Compara o estado atual com o estado de vitória
+                return JSON.stringify(puzzleState) === JSON.stringify(winningState);
+            }
+
+            // Função para exibir mensagens
+            function showMessage(element, text, type) {
+                element.classList.remove('hidden');
+                element.classList.remove('bg-yellow-100', 'bg-green-100', 'bg-red-100', 'bg-blue-100');
+                element.classList.remove('border-yellow-400', 'border-green-400', 'border-red-400', 'border-blue-400');
+                element.classList.remove('text-yellow-700', 'text-green-700', 'text-red-700', 'text-blue-700');
+
+                if (type === 'yellow') {
+                    element.classList.add('bg-yellow-100', 'border-yellow-400', 'text-yellow-700');
+                } else if (type === 'green') {
+                    element.classList.add('bg-green-100', 'border-green-400', 'text-green-700');
+                } else if (type === 'red') {
+                    element.classList.add('bg-red-100', 'border-red-400', 'text-red-700');
+                } else if (type === 'blue') {
+                    element.classList.add('bg-blue-100', 'border-blue-400', 'text-blue-700');
+                }
+                element.querySelector('span').textContent = text;
+            }
+
+            // Função para ocultar mensagens
+            function hideMessage(element) {
+                element.classList.add('hidden');
+            }
+
+            // Função para chamar a API Gemini e obter uma dica
+            async function getHintFromGemini() {
+                hintButton.disabled = true; // Desabilita o botão enquanto carrega
+                hintLoading.classList.remove('hidden'); // Mostra o indicador de carregamento
+                hideMessage(hintArea); // Oculta a dica anterior, se houver
+
+                const prompt = "Você está agindo como um assistente para um jogo de quebra-cabeça deslizante 3x3. O objetivo é organizar as peças numeradas de 1 a 8 em ordem crescente, com o espaço vazio no final. Dê uma dica breve e útil para alguém que está tentando resolver o quebra-cabeça. A dica deve ser sobre a estratégia geral ou um passo lógico, não uma solução direta. Por exemplo, 'Tente resolver a primeira linha primeiro' ou 'Concentre-se em colocar as peças nos seus lugares finais uma por uma'.";
+                let chatHistory = [];
+                chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+                const payload = { contents: chatHistory };
+                const apiKey = ""; // A chave da API será fornecida pelo ambiente Canvas
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await response.json();
+
+                    if (result.candidates && result.candidates.length > 0 &&
+                        result.candidates[0].content && result.candidates[0].content.parts &&
+                        result.candidates[0].content.parts.length > 0) {
+                        const text = result.candidates[0].content.parts[0].text;
+                        hintText.textContent = text;
+                        hintArea.classList.remove('hidden'); // Mostra a área da dica
+                    } else {
+                        hintText.textContent = "Não foi possível obter uma dica no momento. Tente novamente.";
+                        hintArea.classList.remove('hidden');
+                        hintArea.classList.remove('bg-blue-100'); // Remove cor azul
+                        hintArea.classList.add('bg-red-100', 'border-red-400', 'text-red-700'); // Adiciona cor de erro
+                    }
+                } catch (error) {
+                    console.error("Erro ao chamar a API Gemini:", error);
+                    hintText.textContent = "Erro ao conectar com a IA. Verifique sua conexão.";
+                    hintArea.classList.remove('hidden');
+                    hintArea.classList.remove('bg-blue-100'); // Remove cor azul
+                    hintArea.classList.add('bg-red-100', 'border-red-400', 'text-red-700'); // Adiciona cor de erro
+                } finally {
+                    hintButton.disabled = false; // Reabilita o botão
+                    hintLoading.classList.add('hidden'); // Oculta o indicador de carregamento
+                }
+            }
+
+            // Função para gerar confetes
+            function generateConfetti() {
+                const colors = ['#f0f', '#0ff', '#ff0', '#f00', '#0f0'];
+                for (let i = 0; i < 50; i++) {
+                    const confetti = document.createElement('div');
+                    confetti.classList.add('confetti');
+                    confetti.style.left = `${Math.random() * 100}%`;
+                    confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                    confetti.style.animationDelay = `${Math.random() * 2}s`; // Atraso aleatório
+                    confirmationContent.appendChild(confetti);
+                }
+            }
+
+            // Função para gerar balões
+            function generateBalloons() {
+                const colors = ['#ff6347', '#4682b4', '#daa520', '#9acd32'];
+                for (let i = 0; i < 10; i++) {
+                    const balloon = document.createElement('div');
+                    balloon.classList.add('balloon');
+                    balloon.style.left = `${Math.random() * 100}%`;
+                    balloon.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                    balloon.style.animationDelay = `${Math.random() * 3}s`; // Atraso aleatório
+                    balloon.style.setProperty('--balloon-x-offset', `${(Math.random() - 0.5) * 200}px`); // Deslocamento horizontal
+                    confirmationContent.appendChild(balloon);
+                }
+            }
+
+            // Event listener para o botão de embaralhar
+            shuffleButton.addEventListener('click', shufflePuzzle);
+
+            // Event listener para o botão de dica
+            hintButton.addEventListener('click', getHintFromGemini);
+
+            // Event listener para o botão de confirmar presença
+            confirmButton.addEventListener('click', () => {
+                // Simula uma chamada de API ou processo de confirmação
+                // Em um cenário real, você faria uma requisição para um backend aqui
+                setTimeout(() => {
+                    hideMessage(statusMessage);
+                    hideMessage(errorMessage);
+                    hideMessage(hintArea); // Oculta a dica ao confirmar
+
+                    // Exibe o modal de confirmação
+                    confirmationModal.classList.add('show');
+                    generateConfetti(); // Gera os confetes
+                    generateBalloons(); // Gera os balões
+
+                    // Oculta os botões do jogo
+                    shuffleButton.classList.add('hidden');
+                    hintButton.classList.add('hidden');
+                    confirmButton.classList.add('hidden');
+                }, 500);
+            });
+
+            // Event listener para fechar o modal
+            closeModalButton.addEventListener('click', () => {
+                confirmationModal.classList.remove('show');
+                // Remove confetes e balões para que possam ser gerados novamente
+                confirmationContent.querySelectorAll('.confetti, .balloon').forEach(el => el.remove());
+            });
+
+            // Inicializa o quebra-cabeça ao carregar a página
+            shufflePuzzle(); // Começa com o quebra-cabeça embaralhado
+        };
+    </script>
+</body>
+</html>
